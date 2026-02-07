@@ -106,25 +106,34 @@ class Grid:
         return test_pathfinder.has_path(self.start_pos, self.end_pos)
     
     def _generate_decorations(self):
-        """Generate random decorations (1 per grid cell, blocks placement)"""
-        decor_types = ["rock", "bush", "grass_tuft", "flower"]
+        """Generate random decorations (1 per grid cell, blocks path)"""
+        decor_types = ["rock", "bush"]
         count = 0
         
-        for _ in range(80):  # Try 80 times
-            if count >= 40:
+        for _ in range(200):  # Try many times
+            if count >= 60:
                 break
             
             gx = random.randint(0, self.width - 1)
             gy = random.randint(0, self.height - 1)
             
-            # Don't place on start, end, path, or existing decor
+            # Don't place on start, end, or existing decor
             if (gx, gy) in [self.start_pos, self.end_pos]:
                 continue
             if self.decorations[gx][gy] is not None:
                 continue
             
+            # Test if placing here blocks path
+            test_obstacles = self.pathfinder.obstacles | {(gx, gy)}
+            test_pf = Pathfinder(self.width, self.height)
+            test_pf.set_obstacles(test_obstacles)
+            
+            if not test_pf.has_path(self.start_pos, self.end_pos):
+                continue  # Would block path, skip
+            
             dec_type = random.choice(decor_types)
             self.decorations[gx][gy] = Decoration(gx, gy, dec_type)
+            self.pathfinder.add_obstacle(gx, gy)  # Block path
             count += 1
     
     def place_tower(self, gx: int, gy: int, tower_type: str, tower_instance) -> bool:
