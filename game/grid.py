@@ -111,7 +111,14 @@ class Grid:
         return self.cells[gx][gy] is not None
     
     def draw(self, surface: pygame.Surface, hover_pos: Optional[Tuple[int, int]] = None):
-        """Draw the grid"""
+        # Grid border
+        border_rect = pygame.Rect(
+            self.offset_x - 2, self.offset_y - 2,
+            self.width * self.tile_size + 4,
+            self.height * self.tile_size + 4
+        )
+        pygame.draw.rect(surface, (80, 80, 90), border_rect, 2)
+        
         for x in range(self.width):
             for y in range(self.height):
                 rect = self.get_cell_rect(x, y)
@@ -133,4 +140,8 @@ class Grid:
                     color = COLOR_GRID
                 
                 pygame.draw.rect(surface, color, rect)
-                pygame.draw.rect(surface, COLOR_BG, rect, 1)
+                
+                # Subtle inner highlight for path tiles
+                if (x, y) in self.current_path and (x, y) not in [self.start_pos, self.end_pos]:
+                    inner = rect.inflate(-4, -4)
+                    pygame.draw.rect(surface, (100, 90, 80), inner, 2)
