@@ -7,27 +7,49 @@ from game.systems.pathfinder import Pathfinder
 
 
 class Decoration:
-    """Visual-only map decoration"""
+    """Map decoration - loads sprite or uses fallback"""
+    
+    # Shared sprite cache
+    _sprites = {}
+    
     def __init__(self, gx: int, gy: int, dec_type: str):
         self.gx = gx
         self.gy = gy
         self.type = dec_type
-        # Colors for different decor types
+        self.sprite = self._load_sprite(dec_type)
+        
+        # Fallback colors if no sprite
         self.colors = {
             "rock": (120, 120, 110),
             "bush": (60, 100, 50),
             "grass_tuft": (70, 130, 60),
-            "flower": (200, 180, 80),
         }
         self.color = self.colors.get(dec_type, (150, 150, 150))
-        self.size = random.randint(4, 8)
-        self.offset = (random.randint(-8, 8), random.randint(-8, 8))
+    
+    def _load_sprite(self, name: str) -> Optional[pygame.Surface]:
+        """Load sprite from assets, cache it"""
+        if name in Decoration._sprites:
+            return Decoration._sprites[name]
+        
+        try:
+            path = f"assets/decorations/{name}.png"
+            sprite = pygame.image.load(path).convert_alpha()
+            Decoration._sprites[name] = sprite
+            return sprite
+        except:
+            Decoration._sprites[name] = None
+            return None
     
     def draw(self, surface: pygame.Surface, grid):
         x, y = grid.grid_to_screen(self.gx, self.gy)
-        x += self.offset[0]
-        y += self.offset[1]
-        pygame.draw.circle(surface, self.color, (int(x), int(y)), self.size)
+        
+        if self.sprite:
+            # Center sprite on tile
+            rect = self.sprite.get_rect(center=(int(x), int(y)))
+            surface.blit(self.sprite, rect)
+        else:
+            # Fallback: colored circle
+            pygame.draw.circle(surface, self.color, (int(x), int(y)), 12)
 
 
 class Grid:
