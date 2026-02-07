@@ -18,7 +18,9 @@ class Decoration:
         "rock-2-flat-boulder": 1.25,
         "bush": 1.8,
         "bush-tall": 2.0,
-        "tree": 2.2,
+        "tree-stump": 1.6,
+        "tree-stump2": 1.5,
+        "crates": 1.4,
     }
     
     def __init__(self, gx: int, gy: int, dec_type: str):
@@ -126,8 +128,8 @@ class Grid:
         ]
         self._generate_decorations()
         
-        # Load grass texture
-        self.grass_texture = self._load_grass_texture()
+        # Load tile textures (grass, dirt, concrete)
+        self.tile_textures = self._load_tile_textures()
         
         self._update_path()
     
@@ -170,17 +172,24 @@ class Grid:
         
         return test_pathfinder.has_path(self.start_pos, self.end_pos)
     
-    def _load_grass_texture(self) -> Optional[pygame.Surface]:
-        """Load and prepare grass texture for tiling"""
-        try:
-            texture = pygame.image.load("assets/tiles/grass.png").convert()
-            return texture
-        except:
-            return None
+    def _load_tile_textures(self) -> List[pygame.Surface]:
+        """Load all tile textures"""
+        textures = []
+        texture_files = ["grass.png", "dirt.png", "concreate-floor-tile.png"]
+        
+        for filename in texture_files:
+            try:
+                texture = pygame.image.load(f"assets/tiles/{filename}").convert()
+                textures.append(texture)
+            except:
+                pass
+        
+        return textures if textures else [None]
     
     def _generate_decorations(self):
         """Generate decorations spread out across map"""
-        decor_types = ["rock", "rock-2-flat-boulder", "bush", "bush-tall"]
+        decor_types = ["rock", "rock-2-flat-boulder", "bush", "bush-tall", 
+                      "tree-stump", "tree-stump2", "crates"]
         count = 0
         min_distance = 4  # Tiles between decorations
         
@@ -264,16 +273,18 @@ class Grid:
         return self.cells[gx][gy] is not None
     
     def draw(self, surface: pygame.Surface, hover_pos: Optional[Tuple[int, int]] = None):
-        # Draw grass texture as base - scaled to match tile size
-        if self.grass_texture:
-            # Scale grass to match tile size for perfect alignment
-            scaled_grass = pygame.transform.scale(self.grass_texture, 
-                                                  (self.tile_size, self.tile_size))
-            
+        # Draw tile textures as base - randomly selected per tile
+        if self.tile_textures:
             for gx in range(self.width):
                 for gy in range(self.height):
                     rect = self.get_cell_rect(gx, gy)
-                    surface.blit(scaled_grass, rect)
+                    # Use hash of position to pick consistent random texture
+                    tex_index = (gx * 7 + gy * 13) % len(self.tile_textures)
+                    texture = self.tile_textures[tex_index]
+                    if texture:
+                        scaled = pygame.transform.scale(texture, 
+                                                        (self.tile_size, self.tile_size))
+                        surface.blit(scaled, rect)
         
         # Grid border
         border_rect = pygame.Rect(
