@@ -1,8 +1,33 @@
 """Grid system for Dead End"""
 import pygame
+import random
 from typing import Tuple, Optional, Set, List
 from config import *
 from game.systems.pathfinder import Pathfinder
+
+
+class Decoration:
+    """Visual-only map decoration"""
+    def __init__(self, gx: int, gy: int, dec_type: str):
+        self.gx = gx
+        self.gy = gy
+        self.type = dec_type
+        # Colors for different decor types
+        self.colors = {
+            "rock": (120, 120, 110),
+            "bush": (60, 100, 50),
+            "grass_tuft": (70, 130, 60),
+            "flower": (200, 180, 80),
+        }
+        self.color = self.colors.get(dec_type, (150, 150, 150))
+        self.size = random.randint(4, 8)
+        self.offset = (random.randint(-8, 8), random.randint(-8, 8))
+    
+    def draw(self, surface: pygame.Surface, grid):
+        x, y = grid.grid_to_screen(self.gx, self.gy)
+        x += self.offset[0]
+        y += self.offset[1]
+        pygame.draw.circle(surface, self.color, (int(x), int(y)), self.size)
 
 
 class Grid:
@@ -32,6 +57,10 @@ class Grid:
         
         # Current path (list of grid positions)
         self.current_path: List[Tuple[int, int]] = []
+        
+        # Visual decorations (grass tufts, rocks, etc - no gameplay effect)
+        self.decorations: List[Decoration] = []
+        self._generate_decorations()
         
         self._update_path()
     
@@ -70,6 +99,21 @@ class Grid:
         test_pathfinder.set_obstacles(test_obstacles)
         
         return test_pathfinder.has_path(self.start_pos, self.end_pos)
+    
+    def _generate_decorations(self):
+        """Generate random visual decorations (no gameplay effect)"""
+        decor_types = ["rock", "bush", "grass_tuft", "flower"]
+        
+        for _ in range(40):  # 40 decorations
+            gx = random.randint(0, self.width - 1)
+            gy = random.randint(0, self.height - 1)
+            
+            # Don't place on start, end, or where towers might go
+            if (gx, gy) in [self.start_pos, self.end_pos]:
+                continue
+            
+            dec_type = random.choice(decor_types)
+            self.decorations.append(Decoration(gx, gy, dec_type))
     
     def place_tower(self, gx: int, gy: int, tower_type: str, tower_instance) -> bool:
         """Place a tower on the grid"""
@@ -145,3 +189,7 @@ class Grid:
                 if (x, y) in self.current_path and (x, y) not in [self.start_pos, self.end_pos]:
                     inner = rect.inflate(-4, -4)
                     pygame.draw.rect(surface, (100, 90, 80), inner, 2)
+        
+        # Draw decorations (visual only, under towers/enemies)
+        for dec in self.decorations:
+            dec.draw(surface, self)
