@@ -92,10 +92,10 @@ class Game:
         max_tile_w = available_width // GRID_WIDTH
         max_tile_h = available_height // GRID_HEIGHT
         
-        # Use smaller of the two, cap at 48px (not too huge)
-        TILE_SIZE = min(max_tile_w, max_tile_h, 48)
-        # But keep minimum readable size
-        TILE_SIZE = max(TILE_SIZE, 24)
+        # Use smaller of the two, cap at 64px
+        TILE_SIZE = min(max_tile_w, max_tile_h, 64)
+        # Keep minimum readable size
+        TILE_SIZE = max(TILE_SIZE, 32)
         
         # Recalculate grid size with new tile size
         grid_pixel_width = GRID_WIDTH * TILE_SIZE

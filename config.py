@@ -5,10 +5,10 @@ FPS = 60
 TITLE = "Dead End"
 FULLSCREEN = True  # Borderless windowed
 
-# Grid
-TILE_SIZE = 32
-GRID_WIDTH = 30
-GRID_HEIGHT = 20
+# Grid - fewer tiles, bigger size
+TILE_SIZE = 48
+GRID_WIDTH = 18
+GRID_HEIGHT = 12
 GRID_OFFSET_X = 50
 GRID_OFFSET_Y = 50
 
