@@ -58,8 +58,10 @@ class Grid:
         # Current path (list of grid positions)
         self.current_path: List[Tuple[int, int]] = []
         
-        # Visual decorations (grass tufts, rocks, etc - no gameplay effect)
-        self.decorations: List[Decoration] = []
+        # Visual decorations (1 per grid cell, blocks tower placement)
+        self.decorations: List[List[Optional[Decoration]]] = [
+            [None for _ in range(self.height)] for _ in range(self.width)
+        ]
         self._generate_decorations()
         
         self._update_path()
@@ -92,6 +94,9 @@ class Grid:
         # Must be empty
         if self.cells[gx][gy] is not None:
             return False
+        # Can't place on decorations
+        if self.decorations[gx][gy] is not None:
+            return False
         
         # Check if placing here would block all paths
         test_obstacles = self.pathfinder.obstacles | {(gx, gy)}
@@ -101,19 +106,26 @@ class Grid:
         return test_pathfinder.has_path(self.start_pos, self.end_pos)
     
     def _generate_decorations(self):
-        """Generate random visual decorations (no gameplay effect)"""
+        """Generate random decorations (1 per grid cell, blocks placement)"""
         decor_types = ["rock", "bush", "grass_tuft", "flower"]
+        count = 0
         
-        for _ in range(40):  # 40 decorations
+        for _ in range(80):  # Try 80 times
+            if count >= 40:
+                break
+            
             gx = random.randint(0, self.width - 1)
             gy = random.randint(0, self.height - 1)
             
-            # Don't place on start, end, or where towers might go
+            # Don't place on start, end, path, or existing decor
             if (gx, gy) in [self.start_pos, self.end_pos]:
+                continue
+            if self.decorations[gx][gy] is not None:
                 continue
             
             dec_type = random.choice(decor_types)
-            self.decorations.append(Decoration(gx, gy, dec_type))
+            self.decorations[gx][gy] = Decoration(gx, gy, dec_type)
+            count += 1
     
     def place_tower(self, gx: int, gy: int, tower_type: str, tower_instance) -> bool:
         """Place a tower on the grid"""
@@ -191,5 +203,8 @@ class Grid:
                     pygame.draw.rect(surface, (100, 90, 80), inner, 2)
         
         # Draw decorations (visual only, under towers/enemies)
-        for dec in self.decorations:
-            dec.draw(surface, self)
+        for x in range(self.width):
+            for y in range(self.height):
+                dec = self.decorations[x][y]
+                if dec is not None:
+                    dec.draw(surface, self)
