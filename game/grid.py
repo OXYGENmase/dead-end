@@ -12,10 +12,20 @@ class Decoration:
     # Shared sprite cache
     _sprites = {}
     
+    # Scale factors - bigger is better
+    _scales = {
+        "rock": 1.3,
+        "rock-2-flat-boulder": 1.25,
+        "bush": 1.8,
+        "bush-tall": 2.0,
+        "tree": 2.2,
+    }
+    
     def __init__(self, gx: int, gy: int, dec_type: str):
         self.gx = gx
         self.gy = gy
         self.type = dec_type
+        self.scale = self._scales.get(dec_type, 1.0)
         self.sprite = self._load_sprite(dec_type)
         
         # Fallback colors if no sprite
@@ -42,11 +52,41 @@ class Decoration:
     
     def draw(self, surface: pygame.Surface, grid):
         x, y = grid.grid_to_screen(self.gx, self.gy)
+        tile_size = grid.tile_size
+        
+        # Darken ground beneath decoration (smaller, circular)
+        ground_r = int(tile_size * 0.4)
+        ground_surf = pygame.Surface((ground_r * 2, ground_r * 2), pygame.SRCALPHA)
+        pygame.draw.ellipse(ground_surf, (0, 0, 0, 40), (0, 0, ground_r * 2, ground_r * 2))
+        surface.blit(ground_surf, (int(x) - ground_r, int(y) - ground_r // 2))
         
         if self.sprite:
-            # Center sprite on tile
-            rect = self.sprite.get_rect(center=(int(x), int(y)))
-            surface.blit(self.sprite, rect)
+            # Scale sprite
+            size = int(tile_size * self.scale)
+            scaled = pygame.transform.scale(self.sprite, (size, size))
+            
+            # Different positioning for rocks vs bushes
+            if "rock" in self.type:
+                # Rocks sit LOW, almost embedded in ground
+                rect = scaled.get_rect(center=(int(x), int(y) + size//8))
+                # Smaller, tighter shadow for rocks
+                shadow_w = int(tile_size * self.scale * 0.7)
+                shadow_h = int(tile_size * self.scale * 0.3)
+                shadow_color = (0, 0, 0, 120)
+                shadow_surf = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, shadow_color, (0, 0, shadow_w, shadow_h))
+                surface.blit(shadow_surf, (int(x) - shadow_w//2, int(y) + 4))
+            else:
+                # Bushes/trees sit higher with bigger shadow
+                rect = scaled.get_rect(center=(int(x), int(y) - size//8))
+                shadow_w = int(tile_size * self.scale * 0.9)
+                shadow_h = int(tile_size * self.scale * 0.5)
+                shadow_color = (0, 0, 0, 100)
+                shadow_surf = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, shadow_color, (0, 0, shadow_w, shadow_h))
+                surface.blit(shadow_surf, (int(x) - shadow_w//2, int(y) - 2))
+            
+            surface.blit(scaled, rect)
         else:
             # Fallback: colored circle
             pygame.draw.circle(surface, self.color, (int(x), int(y)), 12)
@@ -85,6 +125,9 @@ class Grid:
             [None for _ in range(self.height)] for _ in range(self.width)
         ]
         self._generate_decorations()
+        
+        # Load grass texture
+        self.grass_texture = self._load_grass_texture()
         
         self._update_path()
     
@@ -127,13 +170,22 @@ class Grid:
         
         return test_pathfinder.has_path(self.start_pos, self.end_pos)
     
+    def _load_grass_texture(self) -> Optional[pygame.Surface]:
+        """Load and prepare grass texture for tiling"""
+        try:
+            texture = pygame.image.load("assets/tiles/grass.png").convert()
+            return texture
+        except:
+            return None
+    
     def _generate_decorations(self):
-        """Generate random decorations (1 per grid cell, blocks path)"""
-        decor_types = ["rock", "bush"]
+        """Generate decorations spread out across map"""
+        decor_types = ["rock", "rock-2-flat-boulder", "bush", "bush-tall"]
         count = 0
+        min_distance = 4  # Tiles between decorations
         
-        for _ in range(200):  # Try many times
-            if count >= 60:
+        for _ in range(300):  # Try many times
+            if count >= 35:  # 35 decorations
                 break
             
             gx = random.randint(0, self.width - 1)
@@ -145,17 +197,31 @@ class Grid:
             if self.decorations[gx][gy] is not None:
                 continue
             
+            # Check distance from other decorations
+            too_close = False
+            for dx in range(-min_distance, min_distance + 1):
+                for dy in range(-min_distance, min_distance + 1):
+                    check_x, check_y = gx + dx, gy + dy
+                    if 0 <= check_x < self.width and 0 <= check_y < self.height:
+                        if self.decorations[check_x][check_y] is not None:
+                            too_close = True
+                            break
+                if too_close:
+                    break
+            if too_close:
+                continue
+            
             # Test if placing here blocks path
             test_obstacles = self.pathfinder.obstacles | {(gx, gy)}
             test_pf = Pathfinder(self.width, self.height)
             test_pf.set_obstacles(test_obstacles)
             
             if not test_pf.has_path(self.start_pos, self.end_pos):
-                continue  # Would block path, skip
+                continue
             
             dec_type = random.choice(decor_types)
             self.decorations[gx][gy] = Decoration(gx, gy, dec_type)
-            self.pathfinder.add_obstacle(gx, gy)  # Block path
+            self.pathfinder.add_obstacle(gx, gy)
             count += 1
     
     def place_tower(self, gx: int, gy: int, tower_type: str, tower_instance) -> bool:
@@ -198,6 +264,17 @@ class Grid:
         return self.cells[gx][gy] is not None
     
     def draw(self, surface: pygame.Surface, hover_pos: Optional[Tuple[int, int]] = None):
+        # Draw grass texture as base - scaled to match tile size
+        if self.grass_texture:
+            # Scale grass to match tile size for perfect alignment
+            scaled_grass = pygame.transform.scale(self.grass_texture, 
+                                                  (self.tile_size, self.tile_size))
+            
+            for gx in range(self.width):
+                for gy in range(self.height):
+                    rect = self.get_cell_rect(gx, gy)
+                    surface.blit(scaled_grass, rect)
+        
         # Grid border
         border_rect = pygame.Rect(
             self.offset_x - 2, self.offset_y - 2,
@@ -210,23 +287,28 @@ class Grid:
             for y in range(self.height):
                 rect = self.get_cell_rect(x, y)
                 
-                # Determine cell color
+                # Determine if we need to draw this tile
+                # Let grass show through for empty tiles
                 if (x, y) == self.start_pos:
-                    color = COLOR_START
+                    pygame.draw.rect(surface, COLOR_START, rect)
                 elif (x, y) == self.end_pos:
-                    color = COLOR_END
+                    pygame.draw.rect(surface, COLOR_END, rect)
                 elif self.cells[x][y] is not None:
                     # Tower - use tower's color
                     tower = self.towers.get((x, y))
                     color = tower.color if tower else COLOR_TOWER
+                    pygame.draw.rect(surface, color, rect)
                 elif hover_pos == (x, y):
-                    color = COLOR_GRID_HOVER
+                    # Semi-transparent hover
+                    hover_surf = pygame.Surface((self.tile_size, self.tile_size), pygame.SRCALPHA)
+                    hover_surf.fill((*COLOR_GRID_HOVER, 80))
+                    surface.blit(hover_surf, rect)
                 elif (x, y) in self.current_path:
-                    color = COLOR_PATH
-                else:
-                    color = COLOR_GRID
-                
-                pygame.draw.rect(surface, color, rect)
+                    # Path overlay on grass
+                    path_surf = pygame.Surface((self.tile_size, self.tile_size), pygame.SRCALPHA)
+                    path_surf.fill((*COLOR_PATH, 100))
+                    surface.blit(path_surf, rect)
+                # else: empty tile - grass shows through, no draw
                 
                 # Subtle inner highlight for path tiles
                 if (x, y) in self.current_path and (x, y) not in [self.start_pos, self.end_pos]:
